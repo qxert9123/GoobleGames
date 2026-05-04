@@ -1,59 +1,59 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>GoobleGames</title>
-  <style>
-    body { margin: 0; background: #111; }
-    canvas { display: block; margin: auto; background: #222; }
-  </style>
-</head>
-<body>
-<canvas id="c" width="800" height="500"></canvas>
+const express = require("express");
+const http = require("http");
+const WebSocket = require("ws");
 
-<script>
-const canvas = document.getElementById("c");
-const ctx = canvas.getContext("2d");
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
 
-const ws = new WebSocket("wss://https://gooblegames.onrender.com");
-
-let id;
 let players = {};
-let me = { x: 100, y: 100 };
 
-ws.onmessage = (msg) => {
-  const data = JSON.parse(msg.data);
+function broadcast() {
+  const data = JSON.stringify({
+    type: "update",
+    players
+  });
 
-  if (data.type === "init") {
-    id = data.id;
-    players = data.players;
-  }
-
-  if (data.type === "update") {
-    players = data.players;
-  }
-};
-
-document.addEventListener("keydown", (e) => {
-  if (e.key === "w") me.y -= 5;
-  if (e.key === "s") me.y += 5;
-  if (e.key === "a") me.x -= 5;
-  if (e.key === "d") me.x += 5;
-
-  ws.send(JSON.stringify({ type: "move", pos: me }));
-});
-
-function draw() {
-  ctx.clearRect(0,0,800,500);
-
-  for (let p in players) {
-    ctx.fillStyle = p === id ? "lime" : "cyan";
-    ctx.fillRect(players[p].x, players[p].y, 20, 20);
-  }
-
-  requestAnimationFrame(draw);
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  });
 }
 
-draw();
-</script>
-</body>
-</html>
+wss.on("connection", (ws) => {
+  const id = Math.random().toString(36).slice(2, 10);
+
+  players[id] = {
+    x: Math.random() * 700,
+    y: Math.random() * 400
+  };
+
+  ws.send(JSON.stringify({
+    type: "init",
+    id,
+    players
+  }));
+
+  broadcast();
+
+  ws.on("message", (msg) => {
+    try {
+      const data = JSON.parse(msg);
+
+      if (data.type === "move") {
+        players[id] = data.pos;
+        broadcast();
+      }
+    } catch (e) {}
+  });
+
+  ws.on("close", () => {
+    delete players[id];
+    broadcast();
+  });
+});
+
+server.listen(process.env.PORT || 3000, () => {
+  console.log("Server running");
+});
