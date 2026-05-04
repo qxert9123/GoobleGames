@@ -5,22 +5,13 @@ const WebSocket = require("ws");
 const app = express();
 const server = http.createServer(app);
 
-// 🔥 Proper WebSocket handling for Render
-const wss = new WebSocket.Server({ noServer: true });
-
-server.on("upgrade", (request, socket, head) => {
-  wss.handleUpgrade(request, socket, head, (ws) => {
-    wss.emit("connection", ws, request);
-  });
-});
+// 🔥 WebSocket on /ws (important)
+const wss = new WebSocket.Server({ server, path: "/ws" });
 
 let players = {};
 
 function broadcast() {
-  const data = JSON.stringify({
-    type: "update",
-    players
-  });
+  const data = JSON.stringify({ type: "update", players });
 
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
@@ -30,6 +21,8 @@ function broadcast() {
 }
 
 wss.on("connection", (ws) => {
+  console.log("Player connected");
+
   const id = Math.random().toString(36).slice(2, 10);
 
   players[id] = {
@@ -46,14 +39,11 @@ wss.on("connection", (ws) => {
   broadcast();
 
   ws.on("message", (msg) => {
-    try {
-      const data = JSON.parse(msg);
-
-      if (data.type === "move") {
-        players[id] = data.pos;
-        broadcast();
-      }
-    } catch (e) {}
+    const data = JSON.parse(msg);
+    if (data.type === "move") {
+      players[id] = data.pos;
+      broadcast();
+    }
   });
 
   ws.on("close", () => {
@@ -63,10 +53,7 @@ wss.on("connection", (ws) => {
 });
 
 app.get("/", (req, res) => {
-  res.send("GoobleGames Server Running 🚀");
+  res.send("Server running 🚀");
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log("Server running");
-});
+server.listen(process.env.PORT || 3000);
