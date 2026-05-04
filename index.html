@@ -8,7 +8,6 @@
       background: #111;
       color: white;
       font-family: Arial;
-      text-align: center;
     }
     #status {
       position: fixed;
@@ -25,15 +24,21 @@
 </head>
 <body>
 
-<div id="status">Connecting...</div>
+<div id="status">Starting...</div>
 <canvas id="c" width="800" height="500"></canvas>
 
 <script>
+// 🔥 STEP 1: PROVE JS IS RUNNING
+alert("JS is running ✅");
+
+console.log("Script loaded");
+
+// 🔥 STEP 2: SETUP
 const statusDiv = document.getElementById("status");
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 
-// 🔥 YOUR SERVER (IMPORTANT: includes /ws)
+// 🔥 IMPORTANT: YOUR SERVER URL
 const ws = new WebSocket("wss://gooblegames-1.onrender.com/ws");
 
 let id = null;
@@ -42,20 +47,24 @@ let me = { x: 100, y: 100 };
 
 // 🔌 CONNECTION STATUS
 ws.onopen = () => {
+  console.log("CONNECTED");
   statusDiv.textContent = "CONNECTED ✅";
 };
 
 ws.onerror = (e) => {
+  console.log("ERROR", e);
   statusDiv.textContent = "ERROR ❌";
-  console.log("WebSocket error:", e);
 };
 
 ws.onclose = () => {
+  console.log("CLOSED");
   statusDiv.textContent = "CLOSED ⚠️";
 };
 
-// 🧠 SERVER DATA
+// 🧠 RECEIVE DATA
 ws.onmessage = (msg) => {
+  console.log("Message received");
+
   const data = JSON.parse(msg.data);
 
   if (data.type === "init") {
