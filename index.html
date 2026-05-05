@@ -1,104 +1,97 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>GoobleGames</title>
+  <title>Cozy Winter Chill</title>
   <style>
     body {
       margin: 0;
-      background: #111;
-      color: white;
+      background: linear-gradient(#0b1d2a, #1e3a4c);
+      overflow: hidden;
       font-family: Arial;
+      color: white;
     }
-    #status {
+    #text {
       position: fixed;
-      top: 10px;
-      left: 10px;
+      bottom: 20px;
+      width: 100%;
+      text-align: center;
       font-size: 18px;
+      opacity: 0.8;
     }
     canvas {
       display: block;
-      margin: auto;
-      background: #222;
     }
   </style>
 </head>
 <body>
 
-<div id="status">Starting...</div>
-<canvas id="c" width="800" height="500"></canvas>
+<canvas id="c"></canvas>
+<div id="text">WASD to walk • Click to sip hot chocolate ☕</div>
 
 <script>
-// 🔥 STEP 1: PROVE JS IS RUNNING
-alert("JS is running ✅");
-
-console.log("Script loaded");
-
-// 🔥 STEP 2: SETUP
-const statusDiv = document.getElementById("status");
 const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 
-// 🔥 IMPORTANT: YOUR SERVER URL
-const ws = new WebSocket("wss://gooblegames-1.onrender.com/ws");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-let id = null;
-let players = {};
-let me = { x: 100, y: 100 };
+// 🧍 player
+let player = { x: canvas.width/2, y: canvas.height/2 };
 
-// 🔌 CONNECTION STATUS
-ws.onopen = () => {
-  console.log("CONNECTED");
-  statusDiv.textContent = "CONNECTED ✅";
-};
+// ❄️ snow
+let snow = [];
+for (let i = 0; i < 150; i++) {
+  snow.push({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    speed: Math.random() * 1 + 0.5
+  });
+}
 
-ws.onerror = (e) => {
-  console.log("ERROR", e);
-  statusDiv.textContent = "ERROR ❌";
-};
+// ☕ sip effect
+let sip = 0;
 
-ws.onclose = () => {
-  console.log("CLOSED");
-  statusDiv.textContent = "CLOSED ⚠️";
-};
-
-// 🧠 RECEIVE DATA
-ws.onmessage = (msg) => {
-  console.log("Message received");
-
-  const data = JSON.parse(msg.data);
-
-  if (data.type === "init") {
-    id = data.id;
-    players = data.players;
-  }
-
-  if (data.type === "update") {
-    players = data.players;
-  }
-};
-
-// 🎮 MOVEMENT
 document.addEventListener("keydown", (e) => {
-  if (!id) return;
-
-  if (e.key === "w") me.y -= 5;
-  if (e.key === "s") me.y += 5;
-  if (e.key === "a") me.x -= 5;
-  if (e.key === "d") me.x += 5;
-
-  ws.send(JSON.stringify({
-    type: "move",
-    pos: me
-  }));
+  if (e.key === "w") player.y -= 2;
+  if (e.key === "s") player.y += 2;
+  if (e.key === "a") player.x -= 2;
+  if (e.key === "d") player.x += 2;
 });
 
-// 🖼️ DRAW LOOP
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+document.addEventListener("click", () => {
+  sip = 1; // trigger cozy glow
+});
 
-  for (let p in players) {
-    ctx.fillStyle = (p === id) ? "lime" : "cyan";
-    ctx.fillRect(players[p].x, players[p].y, 20, 20);
+function draw() {
+  // 🌌 background fade
+  ctx.fillStyle = "rgba(11,29,42,0.3)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // ❄️ snow
+  ctx.fillStyle = "white";
+  for (let s of snow) {
+    ctx.fillRect(s.x, s.y, 2, 2);
+    s.y += s.speed;
+
+    if (s.y > canvas.height) {
+      s.y = 0;
+      s.x = Math.random() * canvas.width;
+    }
+  }
+
+  // 🧍 player (little warm light)
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, 10, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffd27f";
+  ctx.fill();
+
+  // 🔥 cozy glow when sipping
+  if (sip > 0) {
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, 40, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,180,100,0.2)";
+    ctx.fill();
+    sip -= 0.01;
   }
 
   requestAnimationFrame(draw);
