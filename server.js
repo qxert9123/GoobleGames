@@ -5,128 +5,97 @@ const WebSocket = require("ws");
 const app = express();
 const server = http.createServer(app);
 
-// WebSocket on /ws
 const wss = new WebSocket.Server({ server, path: "/ws" });
 
-let players = {};
+// 🧠 rooms system
+let rooms = {};
 
-function broadcast() {
-  const data = JSON.stringify({ type: "update", players });
-
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(data);
-    }
-  });
+function getRoom(id) {
+  if (!rooms[id]) {
+    rooms[id] = {
+      players: {}
+    };
+  }
+  return rooms[id];
 }
 
-wss.on("connection", (ws) => {
-  const id = Math.random().toString(36).slice(2, 10);
+// 🔥 game loop (smooth updates)
+setInterval(() => {
+  for (let roomId in rooms) {
+    let room = rooms[roomId];
 
-  players[id] = {
-    x: Math.random() * 700,
-    y: Math.random() * 400
+    const data = JSON.stringify({
+      type: "update",
+      players: room.players
+    });
+
+    for (let p in room.players) {
+      let ws = room.players[p].ws;
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+      }
+    }
+  }
+}, 50); // 20 FPS
+
+wss.on("connection", (ws, req) => {
+  const url = new URL(req.url, "http://localhost");
+  const roomId = url.searchParams.get("room") || "default";
+
+  const room = getRoom(roomId);
+
+  const id = Math.random().toString(36).slice(2, 9);
+
+  room.players[id] = {
+    x: 100,
+    y: 100,
+    vx: 0,
+    vy: 0,
+    ws
   };
 
   ws.send(JSON.stringify({
     type: "init",
-    id,
-    players
+    id
   }));
-
-  broadcast();
 
   ws.on("message", (msg) => {
     const data = JSON.parse(msg);
-    if (data.type === "move") {
-      players[id] = data.pos;
-      broadcast();
+
+    if (data.type === "input") {
+      const p = room.players[id];
+      if (!p) return;
+
+      // input-based movement (smooth)
+      p.vx += data.dx * 0.5;
+      p.vy += data.dy * 0.5;
     }
   });
 
   ws.on("close", () => {
-    delete players[id];
-    broadcast();
+    delete room.players[id];
   });
 });
 
-// 🔥 THIS IS THE IMPORTANT PART — SERVE THE GAME
+// 🔥 physics loop
+setInterval(() => {
+  for (let roomId in rooms) {
+    let room = rooms[roomId];
+
+    for (let id in room.players) {
+      let p = room.players[id];
+
+      p.x += p.vx;
+      p.y += p.vy;
+
+      p.vx *= 0.9;
+      p.vy *= 0.9;
+    }
+  }
+}, 50);
+
 app.get("/", (req, res) => {
-  res.send(`
-<!DOCTYPE html>
-<html>
-<head>
-<title>GoobleGames</title>
-<style>
-body { margin:0; background:#111; color:white; }
-canvas { display:block; margin:auto; background:#222; }
-#status { position:fixed; top:10px; left:10px; }
-</style>
-</head>
-<body>
-
-<div id="status">Connecting...</div>
-<canvas id="c" width="800" height="500"></canvas>
-
-<script>
-const statusDiv = document.getElementById("status");
-const canvas = document.getElementById("c");
-const ctx = canvas.getContext("2d");
-
-const ws = new WebSocket("wss://gooblegames-1.onrender.com/ws");
-
-let id = null;
-let players = {};
-let me = { x: 100, y: 100 };
-
-ws.onopen = () => statusDiv.textContent = "CONNECTED ✅";
-ws.onerror = () => statusDiv.textContent = "ERROR ❌";
-ws.onclose = () => statusDiv.textContent = "CLOSED ⚠️";
-
-ws.onmessage = (msg) => {
-  const data = JSON.parse(msg.data);
-
-  if (data.type === "init") {
-    id = data.id;
-    players = data.players;
-  }
-
-  if (data.type === "update") {
-    players = data.players;
-  }
-};
-
-document.addEventListener("keydown", (e) => {
-  if (!id) return;
-
-  if (e.key === "w") me.y -= 5;
-  if (e.key === "s") me.y += 5;
-  if (e.key === "a") me.x -= 5;
-  if (e.key === "d") me.x += 5;
-
-  ws.send(JSON.stringify({
-    type: "move",
-    pos: me
-  }));
-});
-
-function draw() {
-  ctx.clearRect(0,0,800,500);
-
-  for (let p in players) {
-    ctx.fillStyle = (p === id) ? "lime" : "cyan";
-    ctx.fillRect(players[p].x, players[p].y, 20, 20);
-  }
-
-  requestAnimationFrame(draw);
-}
-
-draw();
-</script>
-
-</body>
-</html>
-  `);
+  res.send("Multiplayer server running 🚀");
 });
 
 server.listen(process.env.PORT || 3000);
